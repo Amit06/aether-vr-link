@@ -238,7 +238,8 @@ class AetherEngineState:
         # By default, continuous Dwell-Hold clicking is OFF so you can watch movies or read
         # without accidental clicks! Press [Alt + Space] on PC or Volume Down on phone to toggle,
         # or only arm dwell when hovering over interactive UI edges.
-        self.mouse_control_enabled: bool = True
+        self.mouse_control_enabled: bool = False
+        self.show_vr_cursor: bool = False
         self.dwell_enabled: bool = False
         self.dwell_auto_sleep_sec: float = 5.0  # Auto-disarm dwell after 5s of watching still
         self.dwell_time_ms: int = 850
@@ -511,6 +512,8 @@ class AetherEngineState:
                 self.active_monitor_index = idx
         if "mouse_control_enabled" in cfg:
             self.mouse_control_enabled = bool(cfg["mouse_control_enabled"])
+        if "show_vr_cursor" in cfg:
+            self.show_vr_cursor = bool(cfg["show_vr_cursor"])
         if "dwell_enabled" in cfg:
             self.dwell_enabled = bool(cfg["dwell_enabled"])
         if "dwell_time_ms" in cfg:
@@ -794,11 +797,8 @@ def capture_frame_bytes(
 
     src_w, src_h = raw_shot.width, raw_shot.height
 
-    # Only draw the spatial cursor reticle when Mouse Control is active AND either Dwell is enabled
-    # OR the head moved within the last 2.5 seconds (Cinema Auto-Hide so your movie view is 100% clean!)
-    show_cursor_overlay = engine.mouse_control_enabled and (
-        engine.dwell_enabled or (time.perf_counter() - getattr(engine, "last_significant_move_time", 0.0) < 2.5)
-    )
+    # Cursor overlay is hidden by default (`show_vr_cursor = False`) for a 100% clean cinema view
+    show_cursor_overlay = getattr(engine, "show_vr_cursor", False)
     if show_cursor_overlay:
         draw = ImageDraw.Draw(img)
         cx = int(norm_x * src_w)
