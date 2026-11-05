@@ -150,10 +150,12 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
     }
 
     private fun renderEyeScene(eyeOffsetX: Float) {
+        // Converge both eyes onto the center of the virtual monitor at (0, 0, -screenDistance)
+        // so the cursor and screen fuse into a single razor-sharp image without double vision!
         Matrix.setLookAtM(
             viewMatrix, 0,
             eyeOffsetX, 0.0f, 0.0f,
-            eyeOffsetX, 0.0f, -1.0f,
+            0.0f, 0.0f, -screenDistance,
             0.0f, 1.0f, 0.0f
         )
 

@@ -580,10 +580,10 @@
 
           <div class="control-group">
             <div class="control-row">
-              <span>Stereoscopic IPD Offset</span>
-              <span class="control-val" id="lbl-ipd">62 mm</span>
+              <span>Stereo Convergence / IPD Shift (0 = Single Merged Focus)</span>
+              <span class="control-val" id="lbl-ipd">0 mm</span>
             </div>
-            <input type="range" id="rng-ipd" min="0.048" max="0.076" step="0.001" value="0.062" oninput="pushConfig()" />
+            <input type="range" id="rng-ipd" min="-0.060" max="0.060" step="0.002" value="0.000" oninput="pushConfig()" />
           </div>
         </section>
       </div>

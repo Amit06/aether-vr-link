@@ -267,7 +267,7 @@ class AetherEngineState:
         self.stream_scale: float = 1.0
         self.vr_screen_distance: float = 2.0
         self.vr_screen_curvature: float = 0.20
-        self.vr_ipd_offset: float = 0.062
+        self.vr_ipd_offset: float = 0.0  # 0.0 = Converged stereo focus on the virtual monitor (no double-cursor diplomatic ghosting!)
         self.vr_gaze_follow: bool = False
         self.vr_zoom_crop: bool = False
         self.vr_zoom_factor: float = 1.85
@@ -544,7 +544,7 @@ class AetherEngineState:
         if "vr_screen_curvature" in cfg:
             self.vr_screen_curvature = max(0.0, min(1.0, float(cfg["vr_screen_curvature"])))
         if "vr_ipd_offset" in cfg:
-            self.vr_ipd_offset = max(0.040, min(0.080, float(cfg["vr_ipd_offset"])))
+            self.vr_ipd_offset = max(-0.080, min(0.080, float(cfg["vr_ipd_offset"])))
         if "vr_gaze_follow" in cfg:
             self.vr_gaze_follow = bool(cfg["vr_gaze_follow"])
         if "vr_zoom_crop" in cfg:

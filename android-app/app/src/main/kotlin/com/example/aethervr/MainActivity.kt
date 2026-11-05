@@ -182,10 +182,10 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         clickMode = obj.optString("clickMode", "left").uppercase()
                         totalClicks = obj.optInt("totalClicks", 0)
 
-                        glRenderer.screenDistance = obj.optDouble("dist", 1.25).toFloat()
-                        glRenderer.screenCurvature = obj.optDouble("curv", 0.28).toFloat()
-                        glRenderer.ipdOffset = obj.optDouble("ipd", 0.062).toFloat()
-                        glRenderer.gazeFollowEnabled = obj.optBoolean("follow", true)
+                        glRenderer.screenDistance = obj.optDouble("dist", 2.0).toFloat()
+                        glRenderer.screenCurvature = obj.optDouble("curv", 0.20).toFloat()
+                        glRenderer.ipdOffset = obj.optDouble("ipd", 0.0).toFloat()
+                        glRenderer.gazeFollowEnabled = obj.optBoolean("follow", false)
 
                         if (clicked) {
                             triggerHapticPulse()
@@ -518,34 +518,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 )
             }
 
-            // Center Stereoscopic Gaze Reticle + Dwell Progress Ring
-            // Auto-hides when Dwell is 0 so you have an unobstructed cinema view!
-            if (dwellProgress > 0.02f) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .align(Alignment.Center),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            color = Color(0x5500F0FF),
-                            style = Stroke(width = 1.5.dp.toPx())
-                        )
-                        drawArc(
-                            color = Color(0xFF00FFA3),
-                            startAngle = -90f,
-                            sweepAngle = 360f * dwellProgress.coerceIn(0f, 1f),
-                            useCenter = false,
-                            style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round)
-                        )
-                        drawCircle(
-                            color = Color(0xFF00F0FF),
-                            radius = 2.5.dp.toPx()
-                        )
-                    }
-                }
-            }
+            // Note: Removed the duplicate 2D HUD center reticle because the cursor + dwell ring
+            // is already rendered directly on the 3D virtual monitor surface!
 
             // Bottom Dwell Status & Quick Controls Pill
             Row(
