@@ -82,7 +82,8 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        GLES20.glClearColor(0.012f, 0.020f, 0.045f, 1.0f)
+        // Pure black cinema void background (removed cyber grid floor lines & cyan border)
+        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
@@ -164,12 +165,7 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
 
         Matrix.multiplyMM(vpMatrix, 0, projMatrix, 0, viewMatrix, 0)
 
-        // 1. Cyber Floor Reference Grid
-        Matrix.setIdentityM(modelMatrix, 0)
-        Matrix.multiplyMM(mvpMatrix, 0, vpMatrix, 0, modelMatrix, 0)
-        drawGrid(mvpMatrix)
-
-        // 2. High-Resolution Curved IMAX Virtual Monitor
+        // Draw High-Resolution Curved IMAX Virtual Monitor (without distracting grid lines)
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.translateM(modelMatrix, 0, 0f, 0f, -screenDistance)
         Matrix.multiplyMM(mvpMatrix, 0, vpMatrix, 0, modelMatrix, 0)
@@ -345,12 +341,6 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
             uniform int uHasTexture;
             uniform vec2 uTexelSize;
             void main() {
-                float borderX = min(vTexCoord.x, 1.0 - vTexCoord.x);
-                float borderY = min(vTexCoord.y, 1.0 - vTexCoord.y);
-                if (borderX < 0.003 || borderY < 0.005) {
-                    gl_FragColor = vec4(0.0, 0.94, 1.0, 0.85);
-                    return;
-                }
                 if (uHasTexture == 1) {
                     vec3 center = texture2D(sTexture, vTexCoord).rgb;
                     vec3 north  = texture2D(sTexture, vTexCoord + vec2(0.0, -uTexelSize.y)).rgb;

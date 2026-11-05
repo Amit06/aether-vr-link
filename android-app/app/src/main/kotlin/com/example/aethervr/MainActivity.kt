@@ -490,55 +490,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     @Composable
     private fun EyeHudOverlay(modifier: Modifier = Modifier) {
-        Box(modifier = modifier.padding(vertical = 12.dp, horizontal = 16.dp)) {
-            // Top Telemetry Pill inside each eye
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .background(Color(0xB8070D1B), RoundedCornerShape(50))
-                    .border(1.dp, Color(0x5500F0FF), RoundedCornerShape(50))
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(
-                            if (isConnected) Color(0xFF00FFA3) else Color(0xFFFFB800),
-                            CircleShape
-                        )
-                )
-                Text(
-                    text = "YAW ${relYaw.roundToInt()}°  PITCH ${relPitch.roundToInt()}°  |  ${imuHz.roundToInt()}Hz",
-                    color = Color(0xFF00F0FF),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            // Note: Removed the duplicate 2D HUD center reticle because the cursor + dwell ring
-            // is already rendered directly on the 3D virtual monitor surface!
-
-            // Bottom Dwell Status & Quick Controls Pill
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .background(Color(0xB8070D1B), RoundedCornerShape(50))
-                    .border(1.dp, Color(0x4400FFA3), RoundedCornerShape(50))
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "DWELL: ${(dwellProgress * 100).roundToInt()}%  |  MODE: $clickMode  |  VOL+ RECENTER",
-                    color = Color(0xFFE2E8F0),
-                    fontSize = 9.5.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
+        // 100% clean cinema view — no 2D HUD pills or center blue circles inside the eye viewports!
+        Box(modifier = modifier)
     }
 
     @Composable
