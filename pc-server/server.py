@@ -265,10 +265,10 @@ class AetherEngineState:
         self.stream_fps: int = 35
         self.stream_quality: int = 92
         self.stream_scale: float = 1.0
-        self.vr_screen_distance: float = 1.25
-        self.vr_screen_curvature: float = 0.28
+        self.vr_screen_distance: float = 2.0
+        self.vr_screen_curvature: float = 0.20
         self.vr_ipd_offset: float = 0.062
-        self.vr_gaze_follow: bool = True
+        self.vr_gaze_follow: bool = False
         self.vr_zoom_crop: bool = False
         self.vr_zoom_factor: float = 1.85
 
@@ -820,18 +820,39 @@ def capture_frame_bytes(
         cx = int(norm_x * src_w)
         cy = int(norm_y * src_h)
 
-    # Optional Gaze-Centered Retina Magnifier Crop (Delivers 1:1 pixel-perfect clarity around where you look)
+    # Format streamed frame into a clean 16:9 canvas (letterboxed if 21:9 ultrawide)
+    # so the Android VR 16:9 mesh never stretches or crops the edges, and ALWAYS fits 100% inside each eye!
     if zoom_crop and zoom_factor > 1.05:
         crop_w = int(src_w / zoom_factor)
         crop_h = int(src_h / zoom_factor)
         left = max(0, min(src_w - crop_w, cx - crop_w // 2))
         top = max(0, min(src_h - crop_h, cy - crop_h // 2))
         img = img.crop((left, top, left + crop_w, top + crop_h))
-    elif scale < 0.99:
-        target_w = int(src_w * scale)
-        target_h = int(src_h * scale)
-        if target_w > 0 and target_h > 0:
-            img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+        src_w, src_h = img.size
+
+    # Target crisp 1920x1080 (or scaled) 16:9 output frame with Lanczos resampling for razor-sharp text
+    out_w = int(1920 * scale)
+    out_h = int(1080 * scale)
+    src_aspect = src_w / max(1, src_h)
+    dst_aspect = out_w / max(1, out_h)
+
+    if abs(src_aspect - dst_aspect) < 0.05:
+        if (src_w, src_h) != (out_w, out_h):
+            img = img.resize((out_w, out_h), Image.Resampling.LANCZOS)
+    else:
+        # Fit entire ultrawide or custom monitor inside the 16:9 VR frame without cutting off left/right edges!
+        if src_aspect > dst_aspect:
+            fit_w = out_w
+            fit_h = max(1, int(out_w / src_aspect))
+        else:
+            fit_h = out_h
+            fit_w = max(1, int(out_h * src_aspect))
+        resized = img.resize((fit_w, fit_h), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", (out_w, out_h), (4, 8, 18))
+        pad_x = (out_w - fit_w) // 2
+        pad_y = (out_h - fit_h) // 2
+        canvas.paste(resized, (pad_x, pad_y))
+        img = canvas
 
     buf = io.BytesIO()
     # subsampling=0 enables 4:4:4 full-color chroma so colored text & UI edges have zero compression blur!

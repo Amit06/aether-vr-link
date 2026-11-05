@@ -549,17 +549,17 @@
           <div class="control-group">
             <div class="control-row">
               <span>Virtual Screen Distance (Closer = Larger)</span>
-              <span class="control-val" id="lbl-dist">1.25 m</span>
+              <span class="control-val" id="lbl-dist">2.00 m</span>
             </div>
-            <input type="range" id="rng-dist" min="0.8" max="3.5" step="0.05" value="1.25" oninput="pushConfig()" />
+            <input type="range" id="rng-dist" min="1.2" max="4.0" step="0.05" value="2.0" oninput="pushConfig()" />
           </div>
 
           <div class="control-group">
             <div class="control-row">
               <span>IMAX Screen Curvature</span>
-              <span class="control-val" id="lbl-curv">28%</span>
+              <span class="control-val" id="lbl-curv">20%</span>
             </div>
-            <input type="range" id="rng-curv" min="0.0" max="0.9" step="0.04" value="0.28" oninput="pushConfig()" />
+            <input type="range" id="rng-curv" min="0.0" max="0.9" step="0.04" value="0.20" oninput="pushConfig()" />
           </div>
 
           <div class="control-group">
@@ -943,6 +943,14 @@
       } else if (e.code === 'KeyM' && document.activeElement.tagName !== 'INPUT') {
         const chk = document.getElementById('chk-mouse');
         chk.checked = !chk.checked;
+        pushConfig();
+      } else if ((e.code === 'Equal' || e.code === 'NumpadAdd') && document.activeElement.tagName !== 'INPUT') {
+        const rng = document.getElementById('rng-dist');
+        rng.value = Math.max(1.2, parseFloat(rng.value) - 0.15).toFixed(2);
+        pushConfig();
+      } else if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && document.activeElement.tagName !== 'INPUT') {
+        const rng = document.getElementById('rng-dist');
+        rng.value = Math.min(4.0, parseFloat(rng.value) + 0.15).toFixed(2);
         pushConfig();
       }
     });

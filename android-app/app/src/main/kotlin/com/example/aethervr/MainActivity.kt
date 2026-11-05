@@ -427,23 +427,51 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 )
             }
 
-            // 3. Discreet Corner Gear Button to edit Server IP if needed
-            Box(
+            // 3. Discreet Top-Right Quick Controls (Distance -/+ & Server Link)
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .background(Color(0xAA0A1224), RoundedCornerShape(8.dp))
-                    .border(1.dp, Color(0x5500F0FF), RoundedCornerShape(8.dp))
-                    .clickable { showConfigModal = !showConfigModal }
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (isConnected) "LINK: $serverIp" else "CONNECTING...",
-                    color = if (isConnected) Color(0xFF00FFA3) else Color(0xFFFFB800),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xAA0A1224), RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0x5500F0FF), RoundedCornerShape(8.dp))
+                        .clickable {
+                            glRenderer.screenDistance = (glRenderer.screenDistance - 0.15f).coerceIn(1.2f, 4.0f)
+                        }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text("ZOOM +", color = Color(0xFF00F0FF), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                }
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xAA0A1224), RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0x5500F0FF), RoundedCornerShape(8.dp))
+                        .clickable {
+                            glRenderer.screenDistance = (glRenderer.screenDistance + 0.15f).coerceIn(1.2f, 4.0f)
+                        }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text("DIST -", color = Color(0xFF00F0FF), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                }
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xAA0A1224), RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0x5500F0FF), RoundedCornerShape(8.dp))
+                        .clickable { showConfigModal = !showConfigModal }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = if (isConnected) "LINK: $serverIp" else "CONNECTING...",
+                        color = if (isConnected) Color(0xFF00FFA3) else Color(0xFFFFB800),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             if (showConfigModal) {
