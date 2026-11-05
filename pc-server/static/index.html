@@ -652,8 +652,8 @@
           </div>
 
           <div class="toggle-row">
-            <span><strong>Enable Dwell-to-Click</strong></span>
-            <input type="checkbox" id="chk-dwell" checked onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--emerald);" />
+            <span><strong>Enable Dwell-to-Click (Hold Gaze)</strong></span>
+            <input type="checkbox" id="chk-dwell" onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--emerald);" />
           </div>
 
           <div class="control-group">
@@ -936,6 +936,14 @@
       if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
         recenterHead();
+      } else if (e.code === 'KeyD' && document.activeElement.tagName !== 'INPUT') {
+        const chk = document.getElementById('chk-dwell');
+        chk.checked = !chk.checked;
+        pushConfig();
+      } else if (e.code === 'KeyM' && document.activeElement.tagName !== 'INPUT') {
+        const chk = document.getElementById('chk-mouse');
+        chk.checked = !chk.checked;
+        pushConfig();
       }
     });
   </script>

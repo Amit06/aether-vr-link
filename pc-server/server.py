@@ -235,11 +235,15 @@ class AetherEngineState:
         self.screen_h: int = active_m["height"]
 
         # Configuration Parameters (Live-Tunable from PC Dashboard or Android HUD)
+        # By default, continuous Dwell-Hold clicking is OFF so you can watch movies or read
+        # without accidental clicks! Press [Alt + Space] on PC or Volume Down on phone to toggle,
+        # or only arm dwell when hovering over interactive UI edges.
         self.mouse_control_enabled: bool = True
-        self.dwell_enabled: bool = True
-        self.dwell_time_ms: int = 750
+        self.dwell_enabled: bool = False
+        self.dwell_auto_sleep_sec: float = 5.0  # Auto-disarm dwell after 5s of watching still
+        self.dwell_time_ms: int = 850
         self.dwell_radius_px: float = 28.0
-        self.dwell_cooldown_ms: int = 950
+        self.dwell_cooldown_ms: int = 1200
         self.click_mode: str = "left"  # "left", "right", "double"
 
         # Sensitivity: degrees of head rotation for full screen width/height
@@ -300,6 +304,7 @@ class AetherEngineState:
         self.dwell_progress: float = 0.0
         self.dwell_triggered_this_anchor: bool = False
         self.last_click_time: float = 0.0
+        self.last_significant_move_time: float = time.perf_counter()
         self.total_clicks: int = 0
 
         # Telemetry Metrics
@@ -436,6 +441,8 @@ class AetherEngineState:
 
         target_x = self.screen_left + int(self.norm_x * (self.screen_w - 1))
         target_y = self.screen_top + int(self.norm_y * (self.screen_h - 1))
+        if math.hypot(target_x - self.cursor_x, target_y - self.cursor_y) > 8.0:
+            self.last_significant_move_time = now
         self.cursor_x = target_x
         self.cursor_y = target_y
 
@@ -749,6 +756,14 @@ async def ws_vr_headset(websocket: WebSocket):
             elif msg_type == "toggle_zoom":
                 engine.vr_zoom_crop = not engine.vr_zoom_crop
                 await websocket.send_text(json.dumps({"type": "event", "event": "zoom_toggled", "zoom": engine.vr_zoom_crop}))
+            elif msg_type == "toggle_dwell":
+                engine.dwell_enabled = not engine.dwell_enabled
+                engine.dwell_progress = 0.0
+                await websocket.send_text(json.dumps({"type": "event", "event": "dwell_toggled", "dwell_enabled": engine.dwell_enabled}))
+            elif msg_type == "toggle_mouse":
+                engine.mouse_control_enabled = not engine.mouse_control_enabled
+                engine.dwell_progress = 0.0
+                await websocket.send_text(json.dumps({"type": "event", "event": "mouse_toggled", "mouse_enabled": engine.mouse_control_enabled}))
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -779,23 +794,31 @@ def capture_frame_bytes(
 
     src_w, src_h = raw_shot.width, raw_shot.height
 
-    # Draw high-contrast spatial cursor + dwell ring at native 1:1 resolution before any scaling/cropping
-    draw = ImageDraw.Draw(img)
-    cx = int(norm_x * src_w)
-    cy = int(norm_y * src_h)
-    r_outer = 16
-    draw.ellipse((cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer), outline=(0, 240, 255), width=3)
-    draw.ellipse((cx - 4, cy - 4, cx + 4, cy + 4), fill=(255, 255, 255))
-    if dwell > 0.02:
-        extent = int(360 * dwell)
-        r_dwell = 25
-        draw.arc(
-            (cx - r_dwell, cy - r_dwell, cx + r_dwell, cy + r_dwell),
-            start=-90,
-            end=-90 + extent,
-            fill=(0, 255, 163),
-            width=5,
-        )
+    # Only draw the spatial cursor reticle when Mouse Control is active AND either Dwell is enabled
+    # OR the head moved within the last 2.5 seconds (Cinema Auto-Hide so your movie view is 100% clean!)
+    show_cursor_overlay = engine.mouse_control_enabled and (
+        engine.dwell_enabled or (time.perf_counter() - getattr(engine, "last_significant_move_time", 0.0) < 2.5)
+    )
+    if show_cursor_overlay:
+        draw = ImageDraw.Draw(img)
+        cx = int(norm_x * src_w)
+        cy = int(norm_y * src_h)
+        r_outer = 14
+        draw.ellipse((cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer), outline=(0, 240, 255), width=2)
+        draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255))
+        if dwell > 0.02:
+            extent = int(360 * dwell)
+            r_dwell = 23
+            draw.arc(
+                (cx - r_dwell, cy - r_dwell, cx + r_dwell, cy + r_dwell),
+                start=-90,
+                end=-90 + extent,
+                fill=(0, 255, 163),
+                width=4,
+            )
+    else:
+        cx = int(norm_x * src_w)
+        cy = int(norm_y * src_h)
 
     # Optional Gaze-Centered Retina Magnifier Crop (Delivers 1:1 pixel-perfect clarity around where you look)
     if zoom_crop and zoom_factor > 1.05:

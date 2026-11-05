@@ -491,20 +491,19 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             }
 
             // Center Stereoscopic Gaze Reticle + Dwell Progress Ring
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.Center),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    // Subtle outer reticle ring
-                    drawCircle(
-                        color = Color(0x5500F0FF),
-                        style = Stroke(width = 1.5.dp.toPx())
-                    )
-                    // Dwell progress arc
-                    if (dwellProgress > 0.02f) {
+            // Auto-hides when Dwell is 0 so you have an unobstructed cinema view!
+            if (dwellProgress > 0.02f) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .align(Alignment.Center),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = Color(0x5500F0FF),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
                         drawArc(
                             color = Color(0xFF00FFA3),
                             startAngle = -90f,
@@ -512,12 +511,11 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                             useCenter = false,
                             style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round)
                         )
+                        drawCircle(
+                            color = Color(0xFF00F0FF),
+                            radius = 2.5.dp.toPx()
+                        )
                     }
-                    // Center precision dot
-                    drawCircle(
-                        color = Color(0xFF00F0FF),
-                        radius = 2.5.dp.toPx()
-                    )
                 }
             }
 
