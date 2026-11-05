@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AETHER-VR // Stereoscopic SBS Headset View</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #020409;
+      color: #F8FAFC;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+    }
+    .eye-viewport {
+      width: 50vw;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      border-right: 1px solid rgba(0, 240, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0a1329 0%, #020409 80%);
+    }
+    .screen-frame {
+      width: 88%;
+      aspect-ratio: 16 / 9;
+      border: 1.5px solid rgba(0, 240, 255, 0.45);
+      border-radius: 14px;
+      box-shadow: 0 0 32px rgba(0, 240, 255, 0.15);
+      overflow: hidden;
+      position: relative;
+      background: #050811;
+    }
+    .screen-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .hud-top {
+      position: absolute;
+      top: 6%;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(8, 15, 30, 0.78);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      font-family: monospace;
+      font-size: 11px;
+      color: #00F0FF;
+      letter-spacing: 0.06em;
+    }
+    .hud-bottom {
+      position: absolute;
+      bottom: 6%;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(8, 15, 30, 0.78);
+      border: 1px solid rgba(0, 255, 163, 0.35);
+      font-family: monospace;
+      font-size: 11px;
+      color: #00FFA3;
+    }
+  </style>
+</head>
+<body>
+  <div class="eye-viewport" id="left-eye">
+    <div class="hud-top" id="hud-top-l">AETHER-VR // YAW: 0.0° PITCH: 0.0°</div>
+    <div class="screen-frame"><img id="img-l" alt="Left VR Feed" /></div>
+    <div class="hud-bottom" id="hud-bot-l">DWELL: READY | TAP TO RECENTER</div>
+  </div>
+  <div class="eye-viewport" id="right-eye">
+    <div class="hud-top" id="hud-top-r">AETHER-VR // YAW: 0.0° PITCH: 0.0°</div>
+    <div class="screen-frame"><img id="img-r" alt="Right VR Feed" /></div>
+    <div class="hud-bottom" id="hud-bot-r">DWELL: READY | TAP TO RECENTER</div>
+  </div>
+
+  <script>
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsStream = new WebSocket(`${proto}://${location.host}/ws/stream`);
+    wsStream.binaryType = 'blob';
+    let prevUrl = null;
+    wsStream.onmessage = (ev) => {
+      const url = URL.createObjectURL(ev.data);
+      document.getElementById('img-l').src = url;
+      document.getElementById('img-r').src = url;
+      if (prevUrl) URL.revokeObjectURL(prevUrl);
+      prevUrl = url;
+    };
+
+    const wsVr = new WebSocket(`${proto}://${location.host}/ws/vr`);
+    window.addEventListener('deviceorientation', (e) => {
+      if (wsVr.readyState === WebSocket.OPEN && e.alpha !== null) {
+        wsVr.send(JSON.stringify({
+          type: 'imu',
+          yaw: -e.alpha,
+          pitch: e.beta || 0,
+          roll: e.gamma || 0,
+          device: 'WebVR Fallback Client'
+        }));
+      }
+    });
+
+    wsVr.onmessage = (ev) => {
+      const d = JSON.parse(ev.data);
+      if (d.type === 'telemetry') {
+        const txtTop = `AETHER-VR // YAW: ${d.yaw}° PITCH: ${d.pitch}° | ${d.hz}Hz`;
+        const txtBot = `DWELL: ${Math.round((d.dwell || 0) * 100)}% | MODE: ${(d.clickMode || 'left').toUpperCase()}`;
+        document.getElementById('hud-top-l').textContent = txtTop;
+        document.getElementById('hud-top-r').textContent = txtTop;
+        document.getElementById('hud-bot-l').textContent = txtBot;
+        document.getElementById('hud-bot-r').textContent = txtBot;
+      }
+    };
+
+    document.body.addEventListener('click', () => {
+      if (wsVr.readyState === WebSocket.OPEN) {
+        wsVr.send(JSON.stringify({ type: 'recenter' }));
+      }
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>

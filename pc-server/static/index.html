@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AETHER-VR // Spatial Head-Tracking & Virtual Desktop Command Center</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-void: #050811;
+      --bg-card: rgba(12, 19, 36, 0.78);
+      --bg-card-hover: rgba(18, 28, 52, 0.88);
+      --border-glass: rgba(0, 240, 255, 0.22);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --cyan: #00F0FF;
+      --cyan-glow: rgba(0, 240, 255, 0.28);
+      --violet: #7B61FF;
+      --emerald: #00FFA3;
+      --amber: #FFB800;
+      --crimson: #FF3366;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at 18% 15%, #0D1730 0%, #050811 65%);
+      color: var(--text-main);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Ambient Cyber Grid Overlay */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+      background-size: 36px 36px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1640px;
+      margin: 0 auto;
+      padding: 18px 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Top Telemetry Navbar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 22px;
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 0 24px rgba(0, 240, 255, 0.04);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(123, 97, 255, 0.25));
+      border: 1px solid var(--cyan);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 18px var(--cyan-glow);
+    }
+
+    .brand-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #FFFFFF, var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .status-pills {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 10px var(--amber);
+    }
+
+    .dot.online {
+      background: var(--emerald);
+      box-shadow: 0 0 12px var(--emerald);
+    }
+
+    .btn-primary {
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.22), rgba(123, 97, 255, 0.26));
+      color: var(--text-main);
+      border: 1px solid var(--cyan);
+      padding: 9px 16px;
+      border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.38), rgba(123, 97, 255, 0.4));
+      box-shadow: 0 0 20px var(--cyan-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Main 3-Column Bento Grid */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: 370px 1fr 390px;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 1320px) {
+      .bento-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .bento-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.highlight {
+      border-color: var(--border-glass);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 10px;
+    }
+
+    .card-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(0, 240, 255, 0.12);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+
+    /* 3D Head Visualizer Viewport */
+    #head3d-container {
+      width: 100%;
+      height: 250px;
+      border-radius: 12px;
+      background: radial-gradient(circle at center, rgba(0, 240, 255, 0.09) 0%, rgba(3, 6, 14, 0.95) 85%);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .imu-axes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .axis-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .axis-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .axis-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-top: 4px;
+      color: var(--text-main);
+    }
+
+    /* Center Spatial Radar & Dwell Sandbox */
+    .radar-stage {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background:
+        radial-gradient(circle at center, rgba(0, 240, 255, 0.08) 0%, rgba(5, 8, 17, 0.95) 75%),
+        linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+      background-size: 100% 100%, 28px 28px, 28px 28px;
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 36px rgba(0, 240, 255, 0.08);
+    }
+
+    .radar-crosshair-h {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(0, 240, 255, 0.16);
+      pointer-events: none;
+    }
+
+    .radar-crosshair-v {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(0, 240, 255, 0.16);
+      pointer-events: none;
+    }
+
+    .gaze-reticle {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: left 0.03s linear, top 0.03s linear;
+    }
+
+    /* Interactive Dwell Test Targets */
+    .sandbox-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .dwell-target-btn {
+      cursor: pointer;
+      padding: 14px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-align: center;
+      transition: all 0.18s ease;
+      user-select: none;
+    }
+
+    .dwell-target-btn:hover {
+      border-color: var(--cyan);
+      background: rgba(0, 240, 255, 0.12);
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.2);
+    }
+
+    .dwell-target-btn.active-flash {
+      background: rgba(0, 255, 163, 0.28);
+      border-color: var(--emerald);
+      box-shadow: 0 0 24px rgba(0, 255, 163, 0.45);
+    }
+
+    /* Controls & Sliders */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+
+    .control-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--cyan);
+      font-size: 0.8rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+      cursor: pointer;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .mode-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .mode-btn {
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+
+    .mode-btn.active {
+      background: rgba(0, 240, 255, 0.18);
+      border-color: var(--cyan);
+      color: var(--text-main);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+    }
+
+    .info-banner {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(123, 97, 255, 0.11);
+      border: 1px solid rgba(123, 97, 255, 0.35);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: #E2E8F0;
+    }
+
+    .mono-code {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--emerald);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- TOP TELEMETRY BAR -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2">
+            <path d="M2 10a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-2.5l-2-2.5h-3l-2 2.5H6a4 4 0 0 1-4-4v-4z"/>
+            <circle cx="8.5" cy="12" r="1.5" fill="#00F0FF"/>
+            <circle cx="15.5" cy="12" r="1.5" fill="#00F0FF"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">AETHER-VR // SPATIAL CONTROL ENGINE</div>
+          <div class="brand-sub">Native Android VR Service + 120Hz Hardware IMU Head-Mouse & Curved IMAX Desktop</div>
+        </div>
+      </div>
+
+      <div class="status-pills">
+        <div class="pill">
+          <span class="dot" id="conn-dot"></span>
+          <span id="conn-label">WAITING FOR HEADSET</span>
+        </div>
+        <div class="pill">
+          <span>IMU RATE:</span>
+          <strong style="color: var(--cyan)" id="imu-hz-pill">0.0 Hz</strong>
+        </div>
+        <div class="pill">
+          <span>DWELL CLICKS:</span>
+          <strong style="color: var(--emerald)" id="clicks-pill">0</strong>
+        </div>
+        <button class="btn-primary" onclick="recenterHead()">
+          <span>RECENTER HEAD [SPACE]</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN 3-COLUMN BENTO WORKSPACE -->
+    <div class="bento-grid">
+      <!-- LEFT COLUMN: 3D HEAD ORIENTATION & HARDWARE IMU TELEMETRY -->
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <section class="card highlight">
+          <div class="card-header">
+            <div class="card-title">3D IMU SPATIAL POSE</div>
+            <span class="card-badge" id="sensor-badge">TYPE_GAME_ROTATION_VECTOR</span>
+          </div>
+
+          <div id="head3d-container"></div>
+
+          <div class="imu-axes-grid">
+            <div class="axis-box">
+              <div class="axis-label">YAW (X-AXIS)</div>
+              <div class="axis-val" id="val-yaw">0.0°</div>
+            </div>
+            <div class="axis-box">
+              <div class="axis-label">PITCH (Y-AXIS)</div>
+              <div class="axis-val" id="val-pitch">0.0°</div>
+            </div>
+            <div class="axis-box">
+              <div class="axis-label">ROLL (TILT)</div>
+              <div class="axis-val" id="val-roll">0.0°</div>
+            </div>
+          </div>
+
+          <div class="info-banner">
+            <div><strong>Connected Device:</strong> <span id="device-name-text" class="mono-code">SM_N770F (Android VR Native)</span></div>
+            <div style="margin-top:4px;"><strong>PC Server Endpoint:</strong> <span id="server-ip-text" class="mono-code">ws://192.168.1.5:8765/ws/vr</span></div>
+            <div style="margin-top:4px; color: var(--text-muted);">Dark visor compatible: Uses 100% internal MEMS Gyroscope + Accelerometer fusion (Zero camera needed).</div>
+          </div>
+        </section>
+
+        <section class="card highlight">
+          <div class="card-header">
+            <div class="card-title">VIRTUAL 3RD MONITOR & OPTICS</div>
+            <span class="card-badge" id="vdd-badge">PARSEC VDD ACTIVE</span>
+          </div>
+
+          <div class="toggle-row">
+            <span><strong>Enable Virtual 3rd Monitor (1920x1080)</strong></span>
+            <input type="checkbox" id="chk-vdd" checked onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--emerald);" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>VR Stream & Head-Mouse Target Display</span>
+            </div>
+            <select id="sel-monitor" onchange="pushConfig()" style="width:100%; padding:9px 12px; border-radius:9px; background:rgba(5,10,22,0.92); color:var(--cyan); border:1px solid var(--border-glass); font-family:'JetBrains Mono',monospace; font-size:0.78rem; outline:none;">
+              <option value="3">Monitor 3 [VIRTUAL 3RD DISPLAY - VR HEADSET]: 1920x1080</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Virtual Screen Distance</span>
+              <span class="control-val" id="lbl-dist">2.1 m</span>
+            </div>
+            <input type="range" id="rng-dist" min="1.2" max="4.0" step="0.1" value="2.1" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>IMAX Screen Curvature</span>
+              <span class="control-val" id="lbl-curv">35%</span>
+            </div>
+            <input type="range" id="rng-curv" min="0.0" max="0.9" step="0.05" value="0.35" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Stereoscopic IPD Offset</span>
+              <span class="control-val" id="lbl-ipd">64 mm</span>
+            </div>
+            <input type="range" id="rng-ipd" min="0.050" max="0.076" step="0.001" value="0.064" oninput="pushConfig()" />
+          </div>
+        </section>
+      </div>
+
+      <!-- CENTER COLUMN: LIVE GAZE RADAR & DWELL-TO-CLICK SANDBOX -->
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <section class="card highlight" style="flex: 1;">
+          <div class="card-header">
+            <div class="card-title">REAL-TIME GAZE CURSOR & DWELL TELEMETRY</div>
+            <span class="card-badge" id="cursor-coords-badge">X: 960, Y: 540</span>
+          </div>
+
+          <div class="radar-stage" id="radar-stage">
+            <div class="radar-crosshair-h"></div>
+            <div class="radar-crosshair-v"></div>
+
+            <!-- Live Reticle + Dwell Progress SVG -->
+            <div class="gaze-reticle" id="gaze-reticle" style="left: 50%; top: 50%;">
+              <svg width="48" height="48" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(0, 240, 255, 0.35)" stroke-width="2" />
+                <circle id="dwell-ring-svg" cx="24" cy="24" r="18" fill="none" stroke="#00FFA3" stroke-width="3.5"
+                        stroke-dasharray="113.1" stroke-dashoffset="113.1" transform="rotate(-90 24 24)" />
+                <circle cx="24" cy="24" r="3.5" fill="#00F0FF" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="card-header" style="margin-top: 4px;">
+            <div class="card-title">HANDS-FREE DWELL INTERACTION SANDBOX</div>
+            <span class="card-badge">HOLD GAZE TO TRIGGER</span>
+          </div>
+
+          <div class="sandbox-grid">
+            <button class="dwell-target-btn" onclick="flashTarget(this, 'RECENTER'); recenterHead();">
+              🎯 RECENTER VIEW
+            </button>
+            <button class="dwell-target-btn" onclick="flashTarget(this, 'LEFT CLICK'); setClickMode('left');">
+              🖱️ LEFT CLICK MODE
+            </button>
+            <button class="dwell-target-btn" onclick="flashTarget(this, 'RIGHT CLICK'); setClickMode('right');">
+              ⚡ RIGHT CLICK MODE
+            </button>
+            <button class="dwell-target-btn" onclick="flashTarget(this, 'DOUBLE CLICK'); setClickMode('double');">
+              🔥 DOUBLE CLICK MODE
+            </button>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; font-size: 0.8rem; color: var(--text-muted);">
+            <span>Last Sandbox Action: <strong style="color: var(--emerald);" id="sandbox-status">Ready — look at any button above and hold still</strong></span>
+            <a href="/vr-web" target="_blank" style="color: var(--cyan); text-decoration: none; font-family: 'JetBrains Mono', monospace;">[Open Web VR Mirror ↗]</a>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN: HEAD-MOUSE CALIBRATION & DWELL ENGINE TUNING -->
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <section class="card highlight">
+          <div class="card-header">
+            <div class="card-title">OS MOUSE & DWELL ENGINE</div>
+            <span class="card-badge">1-EURO FILTER</span>
+          </div>
+
+          <div class="toggle-row">
+            <span><strong>Enable OS Mouse Control</strong></span>
+            <input type="checkbox" id="chk-mouse" checked onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--cyan);" />
+          </div>
+
+          <div class="toggle-row">
+            <span><strong>Enable Dwell-to-Click</strong></span>
+            <input type="checkbox" id="chk-dwell" checked onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--emerald);" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Active Dwell Click Action</span>
+            </div>
+            <div class="mode-selector">
+              <button class="mode-btn active" id="mode-left" onclick="setClickMode('left')">LEFT</button>
+              <button class="mode-btn" id="mode-right" onclick="setClickMode('right')">RIGHT</button>
+              <button class="mode-btn" id="mode-double" onclick="setClickMode('double')">DOUBLE</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Dwell Hold Duration</span>
+              <span class="control-val" id="lbl-dwell-time">750 ms</span>
+            </div>
+            <input type="range" id="rng-dwell-time" min="300" max="2000" step="50" value="750" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Dwell Lock Radius (Tolerance)</span>
+              <span class="control-val" id="lbl-dwell-rad">28 px</span>
+            </div>
+            <input type="range" id="rng-dwell-rad" min="12" max="75" step="2" value="28" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Horizontal FOV Span (Yaw Sensitivity)</span>
+              <span class="control-val" id="lbl-fov-yaw">38°</span>
+            </div>
+            <input type="range" id="rng-fov-yaw" min="15" max="75" step="1" value="38" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Vertical FOV Span (Pitch Sensitivity)</span>
+              <span class="control-val" id="lbl-fov-pitch">24°</span>
+            </div>
+            <input type="range" id="rng-fov-pitch" min="10" max="55" step="1" value="24" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>1-Euro Filter Min Cutoff (Smoothing)</span>
+              <span class="control-val" id="lbl-smooth">1.15 Hz</span>
+            </div>
+            <input type="range" id="rng-smooth" min="0.25" max="3.5" step="0.05" value="1.15" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Micro-Tremor Deadzone</span>
+              <span class="control-val" id="lbl-deadzone">0.12°</span>
+            </div>
+            <input type="range" id="rng-deadzone" min="0.0" max="0.8" step="0.02" value="0.12" oninput="pushConfig()" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <label class="toggle-row" style="font-size: 0.78rem; cursor: pointer;">
+              <span>Invert Yaw</span>
+              <input type="checkbox" id="chk-inv-yaw" onchange="pushConfig()" />
+            </label>
+            <label class="toggle-row" style="font-size: 0.78rem; cursor: pointer;">
+              <span>Invert Pitch</span>
+              <input type="checkbox" id="chk-inv-pitch" onchange="pushConfig()" />
+            </label>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // THREE.JS 3D WIREFRAME VR HEADSET VISUALIZER
+    // =========================================================================
+    const container = document.getElementById('head3d-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(0, 0.3, 3.3);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const headGroup = new THREE.Group();
+    scene.add(headGroup);
+
+    // VR Visor Geometry
+    const visorGeo = new THREE.BoxGeometry(1.35, 0.68, 0.78);
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF, wireframe: true, transparent: true, opacity: 0.75 });
+    const visorMesh = new THREE.Mesh(visorGeo, visorMat);
+    headGroup.add(visorMesh);
+
+    // Front Laser Gaze Vector
+    const beamGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0.4),
+      new THREE.Vector3(0, 0, 1.8)
+    ]);
+    const beamMat = new THREE.LineBasicMaterial({ color: 0x00FFA3 });
+    const beamLine = new THREE.Line(beamGeo, beamMat);
+    headGroup.add(beamLine);
+
+    // Reference Grid Floor
+    const gridHelper = new THREE.GridHelper(4, 12, 0x00F0FF, 0x1E293B);
+    gridHelper.position.y = -0.95;
+    scene.add(gridHelper);
+
+    let targetRotX = 0, targetRotY = 0, targetRotZ = 0;
+    function animate3D() {
+      requestAnimationFrame(animate3D);
+      headGroup.rotation.y += (targetRotY - headGroup.rotation.y) * 0.25;
+      headGroup.rotation.x += (targetRotX - headGroup.rotation.x) * 0.25;
+      headGroup.rotation.z += (targetRotZ - headGroup.rotation.z) * 0.25;
+      renderer.render(scene, camera);
+    }
+    animate3D();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // =========================================================================
+    // LIVE WEBSOCKET TELEMETRY & CONTROLS
+    // =========================================================================
+    let activeClickMode = 'left';
+
+    function connectDashboardWS() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard`);
+
+      ws.onmessage = (ev) => {
+        const s = JSON.parse(ev.data);
+        const dot = document.getElementById('conn-dot');
+        const lbl = document.getElementById('conn-label');
+        if (s.phone_connected) {
+          dot.classList.add('online');
+          lbl.textContent = 'ANDROID VR LINK ACTIVE';
+        } else {
+          dot.classList.remove('online');
+          lbl.textContent = 'WAITING FOR HEADSET';
+        }
+
+        document.getElementById('imu-hz-pill').textContent = `${s.imu_hz.toFixed(1)} Hz`;
+        document.getElementById('clicks-pill').textContent = s.total_clicks;
+        document.getElementById('device-name-text').textContent = s.phone_model;
+        if (s.local_ips && s.local_ips.length) {
+          const lanIp = s.local_ips.find(ip => ip.startsWith('192.168.')) || s.local_ips[0];
+          document.getElementById('server-ip-text').textContent = `ws://${lanIp}:8780/ws/vr`;
+        }
+
+        document.getElementById('val-yaw').textContent = `${s.rel_yaw >= 0 ? '+' : ''}${s.rel_yaw.toFixed(1)}°`;
+        document.getElementById('val-pitch').textContent = `${s.rel_pitch >= 0 ? '+' : ''}${s.rel_pitch.toFixed(1)}°`;
+        document.getElementById('val-roll').textContent = `${s.rel_roll >= 0 ? '+' : ''}${s.rel_roll.toFixed(1)}°`;
+
+        // Update 3D head pose
+        targetRotY = -s.rel_yaw * (Math.PI / 180);
+        targetRotX = s.rel_pitch * (Math.PI / 180);
+        targetRotZ = -s.rel_roll * (Math.PI / 180);
+
+        // Update Radar Reticle & Dwell Ring
+        const reticle = document.getElementById('gaze-reticle');
+        reticle.style.left = `${(s.norm_x * 100).toFixed(2)}%`;
+        reticle.style.top = `${(s.norm_y * 100).toFixed(2)}%`;
+        document.getElementById('cursor-coords-badge').textContent = `X: ${s.cursor_x}, Y: ${s.cursor_y}`;
+
+        const circumference = 113.1;
+        const offset = circumference * (1 - (s.dwell_progress || 0));
+        document.getElementById('dwell-ring-svg').style.strokeDashoffset = offset.toFixed(2);
+
+        if (s.config && s.config.click_mode !== activeClickMode) {
+          updateModeButtonsUI(s.config.click_mode);
+        }
+
+        // Sync Monitor Selector Dropdown
+        if (s.monitors && s.monitors.length) {
+          const sel = document.getElementById('sel-monitor');
+          const sig = s.monitors.map(m => `${m.index}:${m.label}`).join('|');
+          if (sel.dataset.sig !== sig) {
+            sel.dataset.sig = sig;
+            sel.innerHTML = '';
+            s.monitors.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.index;
+              opt.textContent = m.label;
+              if (m.index === s.active_monitor_index) opt.selected = true;
+              sel.appendChild(opt);
+            });
+          } else if (document.activeElement !== sel) {
+            sel.value = s.active_monitor_index;
+          }
+        }
+        const vddBadge = document.getElementById('vdd-badge');
+        if (vddBadge) {
+          vddBadge.textContent = s.virtual_monitor_active ? '3RD MONITOR ACTIVE' : '2 MONITORS';
+        }
+      };
+
+      ws.onclose = () => setTimeout(connectDashboardWS, 1500);
+    }
+    connectDashboardWS();
+
+    function updateModeButtonsUI(mode) {
+      activeClickMode = mode;
+      ['left', 'right', 'double'].forEach(m => {
+        document.getElementById(`mode-${m}`).classList.toggle('active', m === mode);
+      });
+    }
+
+    async function setClickMode(mode) {
+      updateModeButtonsUI(mode);
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ click_mode: mode })
+      });
+    }
+
+    async function recenterHead() {
+      await fetch('/api/recenter', { method: 'POST' });
+    }
+
+    async function pushConfig() {
+      const cfg = {
+        virtual_monitor_enabled: document.getElementById('chk-vdd').checked,
+        active_monitor_index: parseInt(document.getElementById('sel-monitor').value),
+        mouse_control_enabled: document.getElementById('chk-mouse').checked,
+        dwell_enabled: document.getElementById('chk-dwell').checked,
+        dwell_time_ms: parseInt(document.getElementById('rng-dwell-time').value),
+        dwell_radius_px: parseFloat(document.getElementById('rng-dwell-rad').value),
+        fov_yaw_deg: parseFloat(document.getElementById('rng-fov-yaw').value),
+        fov_pitch_deg: parseFloat(document.getElementById('rng-fov-pitch').value),
+        smoothing_min_cutoff: parseFloat(document.getElementById('rng-smooth').value),
+        deadzone_deg: parseFloat(document.getElementById('rng-deadzone').value),
+        invert_yaw: document.getElementById('chk-inv-yaw').checked,
+        invert_pitch: document.getElementById('chk-inv-pitch').checked,
+        vr_screen_distance: parseFloat(document.getElementById('rng-dist').value),
+        vr_screen_curvature: parseFloat(document.getElementById('rng-curv').value),
+        vr_ipd_offset: parseFloat(document.getElementById('rng-ipd').value),
+      };
+
+      document.getElementById('lbl-dwell-time').textContent = `${cfg.dwell_time_ms} ms`;
+      document.getElementById('lbl-dwell-rad').textContent = `${cfg.dwell_radius_px} px`;
+      document.getElementById('lbl-fov-yaw').textContent = `${cfg.fov_yaw_deg}°`;
+      document.getElementById('lbl-fov-pitch').textContent = `${cfg.fov_pitch_deg}°`;
+      document.getElementById('lbl-smooth').textContent = `${cfg.smoothing_min_cutoff} Hz`;
+      document.getElementById('lbl-deadzone').textContent = `${cfg.deadzone_deg}°`;
+      document.getElementById('lbl-dist').textContent = `${cfg.vr_screen_distance.toFixed(1)} m`;
+      document.getElementById('lbl-curv').textContent = `${Math.round(cfg.vr_screen_curvature * 100)}%`;
+      document.getElementById('lbl-ipd').textContent = `${Math.round(cfg.vr_ipd_offset * 1000)} mm`;
+
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg)
+      });
+    }
+
+    function flashTarget(el, label) {
+      el.classList.add('active-flash');
+      document.getElementById('sandbox-status').textContent = `Triggered "${label}" via Gaze Dwell at ${new Date().toLocaleTimeString()}`;
+      setTimeout(() => el.classList.remove('active-flash'), 450);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault();
+        recenterHead();
+      }
+    });
+  </script>
+</body>
+</html>

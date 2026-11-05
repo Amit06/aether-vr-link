@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AetherVR Native</string>
+    <string name="vr_listener_component">com.example.aethervr/com.example.aethervr.AetherVrListenerService</string>
+</resources>
