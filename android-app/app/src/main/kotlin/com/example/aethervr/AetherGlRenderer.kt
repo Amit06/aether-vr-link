@@ -12,34 +12,42 @@ import java.nio.ShortBuffer
 import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * High-production Native OpenGL ES 2.0 Stereoscopic Side-by-Side (SBS) VR Renderer.
- * Renders:
- * 1. Curved IMAX Virtual Desktop Mesh with live PC screen texture + gaze cursor
- * 2. Spatial Reference Cyber Floor Grid in 3D space
- * 3. Head-locked 3D Spatial Gaze Reticle & Dwell Ring Indicator
+ * High-Clarity Native OpenGL ES 2.0 Stereoscopic Side-by-Side (SBS) VR Renderer.
+ * Engineered for maximum text readability and pixel density:
+ * 1. Dynamic Aspect-Ratio Curved IMAX Screen (supports 21:9 Ultrawide 3440x1440 & 16:9 1920x1080)
+ * 2. GLSL Contrast-Adaptive Unsharp Mask (CAS) Shader for crisp text & UI edges in VR lenses
+ * 3. Smooth Gaze-Follow Panning so the screen pans toward your gaze at close viewing distances
  */
 class AetherGlRenderer : GLSurfaceView.Renderer {
 
-    private var surfaceWidth = 1920
+    private var surfaceWidth = 2400
     private var surfaceHeight = 1080
 
-    // Pending PC desktop frame decoded from WebSocket binary stream
     private val pendingBitmap = AtomicReference<Bitmap?>(null)
     private var desktopTextureId = 0
     private var hasValidTexture = false
+    private var texWidth = 1920f
+    private var texHeight = 1080f
 
     // Live Tunable Optics & Orientation State
-    @Volatile var screenDistance: Float = 2.1f
-    @Volatile var screenCurvature: Float = 0.35f
-    @Volatile var ipdOffset: Float = 0.064f
+    @Volatile var screenDistance: Float = 1.25f
+    @Volatile var screenCurvature: Float = 0.28f
+    @Volatile var ipdOffset: Float = 0.062f
+    @Volatile var screenAspect: Float = 1.777f
+    @Volatile var gazeFollowEnabled: Boolean = true
     @Volatile var headYawDeg: Float = 0.0f
     @Volatile var headPitchDeg: Float = 0.0f
     @Volatile var headRollDeg: Float = 0.0f
     @Volatile var dwellProgress: Float = 0.0f
+
+    // Smoothed camera gaze-follow angles
+    private var smoothPanYaw = 0f
+    private var smoothPanPitch = 0f
 
     // Matrices
     private val projMatrix = FloatArray(16)
@@ -52,14 +60,15 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
     private var screenProgram = 0
     private var gridProgram = 0
 
-    // Curved Screen Mesh Buffers
-    private val cols = 32
-    private val rows = 18
+    // High-Density Curved Screen Mesh Buffers (48x24 grid for ultra-smooth IMAX curve)
+    private val cols = 48
+    private val rows = 24
     private lateinit var screenVertexBuffer: FloatBuffer
     private lateinit var screenTexBuffer: FloatBuffer
     private lateinit var screenIndexBuffer: ShortBuffer
     private var screenIndexCount = 0
     private var lastBuiltCurvature = -1f
+    private var lastBuiltAspect = -1f
 
     // Spatial Cyber Grid Buffer
     private lateinit var gridVertexBuffer: FloatBuffer
@@ -73,12 +82,12 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        GLES20.glClearColor(0.015f, 0.025f, 0.055f, 1.0f)
+        GLES20.glClearColor(0.012f, 0.020f, 0.045f, 1.0f)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
 
-        screenProgram = createProgram(VERTEX_SHADER_TEX, FRAGMENT_SHADER_TEX)
+        screenProgram = createProgram(VERTEX_SHADER_TEX, FRAGMENT_SHADER_SHARP_TEX)
         gridProgram = createProgram(VERTEX_SHADER_COLOR, FRAGMENT_SHADER_COLOR)
 
         val texIds = IntArray(1)
@@ -90,7 +99,7 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
 
-        buildCurvedScreenMesh(screenCurvature)
+        buildCurvedScreenMesh(screenCurvature, screenAspect)
         buildFloorGrid()
     }
 
@@ -98,21 +107,26 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
         surfaceWidth = width.coerceAtLeast(2)
         surfaceHeight = height.coerceAtLeast(2)
         val eyeAspect = (surfaceWidth / 2f) / surfaceHeight.toFloat()
-        Matrix.perspectiveM(projMatrix, 0, 52.0f, eyeAspect, 0.1f, 50.0f)
+        // 48-degree vertical FOV maximizes pixels-per-degree (PPD) in phone VR optics
+        Matrix.perspectiveM(projMatrix, 0, 48.0f, eyeAspect, 0.1f, 50.0f)
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        // Upload new PC desktop frame if arrived
         val bmp = pendingBitmap.getAndSet(null)
         if (bmp != null && !bmp.isRecycled) {
+            texWidth = bmp.width.toFloat().coerceAtLeast(1f)
+            texHeight = bmp.height.toFloat().coerceAtLeast(1f)
+            val newAspect = (texWidth / texHeight).coerceIn(1.2f, 3.0f)
+            screenAspect = newAspect
+
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, desktopTextureId)
             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
             bmp.recycle()
             hasValidTexture = true
         }
 
-        if (kotlin.math.abs(screenCurvature - lastBuiltCurvature) > 0.02f) {
-            buildCurvedScreenMesh(screenCurvature)
+        if (abs(screenCurvature - lastBuiltCurvature) > 0.02f || abs(screenAspect - lastBuiltAspect) > 0.03f) {
+            buildCurvedScreenMesh(screenCurvature, screenAspect)
         }
 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
@@ -120,11 +134,17 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
         val halfW = surfaceWidth / 2
         val halfIpd = ipdOffset * 0.5f
 
-        // Render Left Eye Viewport
+        // Smoothly interpolate gaze-follow camera pan so looking left/right brings that edge of the large monitor into the optical sweet spot!
+        val targetYaw = if (gazeFollowEnabled) (headYawDeg * 0.42f).coerceIn(-22f, 22f) else 0f
+        val targetPitch = if (gazeFollowEnabled) (headPitchDeg * 0.35f).coerceIn(-14f, 14f) else 0f
+        smoothPanYaw += (targetYaw - smoothPanYaw) * 0.18f
+        smoothPanPitch += (targetPitch - smoothPanPitch) * 0.18f
+
+        // Left Eye Viewport
         GLES20.glViewport(0, 0, halfW, surfaceHeight)
         renderEyeScene(-halfIpd)
 
-        // Render Right Eye Viewport
+        // Right Eye Viewport
         GLES20.glViewport(halfW, 0, halfW, surfaceHeight)
         renderEyeScene(halfIpd)
     }
@@ -137,30 +157,30 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
             0.0f, 1.0f, 0.0f
         )
 
-        // Subtle spatial parallax from head orientation so the virtual room feels grounded
-        val parallaxYaw = (headYawDeg * 0.12f).coerceIn(-12f, 12f)
-        val parallaxPitch = (headPitchDeg * 0.12f).coerceIn(-8f, 8f)
-        Matrix.rotateM(viewMatrix, 0, parallaxPitch, 1f, 0f, 0f)
-        Matrix.rotateM(viewMatrix, 0, parallaxYaw, 0f, 1f, 0f)
+        Matrix.rotateM(viewMatrix, 0, smoothPanPitch, 1f, 0f, 0f)
+        Matrix.rotateM(viewMatrix, 0, smoothPanYaw, 0f, 1f, 0f)
 
         Matrix.multiplyMM(vpMatrix, 0, projMatrix, 0, viewMatrix, 0)
 
-        // 1. Draw Cyber Floor & Ceiling Reference Grid
+        // 1. Cyber Floor Reference Grid
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, vpMatrix, 0, modelMatrix, 0)
         drawGrid(mvpMatrix)
 
-        // 2. Draw Curved IMAX Virtual Desktop Screen
+        // 2. High-Resolution Curved IMAX Virtual Monitor
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.translateM(modelMatrix, 0, 0f, 0f, -screenDistance)
         Matrix.multiplyMM(mvpMatrix, 0, vpMatrix, 0, modelMatrix, 0)
         drawCurvedScreen(mvpMatrix)
     }
 
-    private fun buildCurvedScreenMesh(curvature: Float) {
+    private fun buildCurvedScreenMesh(curvature: Float, aspect: Float) {
         lastBuiltCurvature = curvature
-        val widthWorld = 2.4f
-        val heightWorld = widthWorld * (9f / 16f)
+        lastBuiltAspect = aspect
+
+        // Base height 1.32m; width scales with monitor aspect ratio (e.g., 2.35m for 16:9 or 3.15m for 21:9 ultrawide)
+        val heightWorld = 1.32f
+        val widthWorld = heightWorld * aspect.coerceIn(1.3f, 2.5f)
 
         val numVerts = (cols + 1) * (rows + 1)
         val verts = FloatArray(numVerts * 3)
@@ -168,7 +188,7 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
 
         var vIdx = 0
         var tIdx = 0
-        val maxAngle = (curvature.coerceIn(0.01f, 0.95f)) * 1.15f // radians of arc
+        val maxAngle = (curvature.coerceIn(0.01f, 0.95f)) * 1.25f
         val radius = widthWorld / maxAngle
 
         for (r in 0..rows) {
@@ -251,7 +271,7 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
         val colLoc = GLES20.glGetUniformLocation(gridProgram, "uColor")
 
         GLES20.glUniformMatrix4fv(mvpLoc, 1, false, mvp, 0)
-        GLES20.glUniform4f(colLoc, 0.0f, 0.94f, 1.0f, 0.16f)
+        GLES20.glUniform4f(colLoc, 0.0f, 0.94f, 1.0f, 0.14f)
 
         GLES20.glEnableVertexAttribArray(posLoc)
         GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, gridVertexBuffer)
@@ -265,9 +285,11 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
         val texLoc = GLES20.glGetAttribLocation(screenProgram, "aTexCoord")
         val mvpLoc = GLES20.glGetUniformLocation(screenProgram, "uMVPMatrix")
         val hasTexLoc = GLES20.glGetUniformLocation(screenProgram, "uHasTexture")
+        val texelLoc = GLES20.glGetUniformLocation(screenProgram, "uTexelSize")
 
         GLES20.glUniformMatrix4fv(mvpLoc, 1, false, mvp, 0)
         GLES20.glUniform1i(hasTexLoc, if (hasValidTexture) 1 else 0)
+        GLES20.glUniform2f(texelLoc, 1.0f / texWidth, 1.0f / texHeight)
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, desktopTextureId)
@@ -313,23 +335,32 @@ class AetherGlRenderer : GLSurfaceView.Renderer {
             }
         """
 
-        private const val FRAGMENT_SHADER_TEX = """
-            precision mediump float;
+        // Contrast-Adaptive Unsharp Mask (CAS) Fragment Shader for crisp text & icons inside VR optics
+        private const val FRAGMENT_SHADER_SHARP_TEX = """
+            precision highp float;
             varying vec2 vTexCoord;
             uniform sampler2D sTexture;
             uniform int uHasTexture;
+            uniform vec2 uTexelSize;
             void main() {
-                // Subtle glowing cyan border around the curved virtual monitor
                 float borderX = min(vTexCoord.x, 1.0 - vTexCoord.x);
                 float borderY = min(vTexCoord.y, 1.0 - vTexCoord.y);
-                if (borderX < 0.005 || borderY < 0.008) {
-                    gl_FragColor = vec4(0.0, 0.94, 1.0, 0.95);
+                if (borderX < 0.003 || borderY < 0.005) {
+                    gl_FragColor = vec4(0.0, 0.94, 1.0, 0.85);
                     return;
                 }
                 if (uHasTexture == 1) {
-                    gl_FragColor = texture2D(sTexture, vTexCoord);
+                    vec3 center = texture2D(sTexture, vTexCoord).rgb;
+                    vec3 north  = texture2D(sTexture, vTexCoord + vec2(0.0, -uTexelSize.y)).rgb;
+                    vec3 south  = texture2D(sTexture, vTexCoord + vec2(0.0,  uTexelSize.y)).rgb;
+                    vec3 west   = texture2D(sTexture, vTexCoord + vec2(-uTexelSize.x, 0.0)).rgb;
+                    vec3 east   = texture2D(sTexture, vTexCoord + vec2( uTexelSize.x, 0.0)).rgb;
+
+                    // Unsharp mask edge enhancement (strength = 0.38)
+                    vec3 blur = 0.25 * (north + south + west + east);
+                    vec3 sharp = clamp(center + (center - blur) * 0.42, 0.0, 1.0);
+                    gl_FragColor = vec4(sharp, 1.0);
                 } else {
-                    // Cyber test standby gradient before stream connects
                     vec3 standby = mix(vec3(0.03, 0.07, 0.16), vec3(0.01, 0.02, 0.05), vTexCoord.y);
                     gl_FragColor = vec4(standby, 0.95);
                 }

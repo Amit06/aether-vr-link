@@ -536,28 +536,54 @@
             </select>
           </div>
 
+          <div class="toggle-row">
+            <span><strong>Gaze-Follow Pan (Auto-Pan to Edges)</strong></span>
+            <input type="checkbox" id="chk-follow" checked onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--cyan);" />
+          </div>
+
+          <div class="toggle-row">
+            <span><strong>Retina Gaze Magnifier (1.85x Crop)</strong></span>
+            <input type="checkbox" id="chk-zoom" onchange="pushConfig()" style="width:18px; height:18px; accent-color: var(--emerald);" />
+          </div>
+
           <div class="control-group">
             <div class="control-row">
-              <span>Virtual Screen Distance</span>
-              <span class="control-val" id="lbl-dist">2.1 m</span>
+              <span>Virtual Screen Distance (Closer = Larger)</span>
+              <span class="control-val" id="lbl-dist">1.25 m</span>
             </div>
-            <input type="range" id="rng-dist" min="1.2" max="4.0" step="0.1" value="2.1" oninput="pushConfig()" />
+            <input type="range" id="rng-dist" min="0.8" max="3.5" step="0.05" value="1.25" oninput="pushConfig()" />
           </div>
 
           <div class="control-group">
             <div class="control-row">
               <span>IMAX Screen Curvature</span>
-              <span class="control-val" id="lbl-curv">35%</span>
+              <span class="control-val" id="lbl-curv">28%</span>
             </div>
-            <input type="range" id="rng-curv" min="0.0" max="0.9" step="0.05" value="0.35" oninput="pushConfig()" />
+            <input type="range" id="rng-curv" min="0.0" max="0.9" step="0.04" value="0.28" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>Stream Resolution Scale (100% = 1:1 Native)</span>
+              <span class="control-val" id="lbl-scale">100%</span>
+            </div>
+            <input type="range" id="rng-scale" min="0.5" max="1.0" step="0.05" value="1.0" oninput="pushConfig()" />
+          </div>
+
+          <div class="control-group">
+            <div class="control-row">
+              <span>JPEG 4:4:4 Chroma Quality</span>
+              <span class="control-val" id="lbl-qual">92%</span>
+            </div>
+            <input type="range" id="rng-qual" min="50" max="98" step="2" value="92" oninput="pushConfig()" />
           </div>
 
           <div class="control-group">
             <div class="control-row">
               <span>Stereoscopic IPD Offset</span>
-              <span class="control-val" id="lbl-ipd">64 mm</span>
+              <span class="control-val" id="lbl-ipd">62 mm</span>
             </div>
-            <input type="range" id="rng-ipd" min="0.050" max="0.076" step="0.001" value="0.064" oninput="pushConfig()" />
+            <input type="range" id="rng-ipd" min="0.048" max="0.076" step="0.001" value="0.062" oninput="pushConfig()" />
           </div>
         </section>
       </div>
@@ -875,6 +901,10 @@
         vr_screen_distance: parseFloat(document.getElementById('rng-dist').value),
         vr_screen_curvature: parseFloat(document.getElementById('rng-curv').value),
         vr_ipd_offset: parseFloat(document.getElementById('rng-ipd').value),
+        stream_scale: parseFloat(document.getElementById('rng-scale').value),
+        stream_quality: parseInt(document.getElementById('rng-qual').value),
+        vr_gaze_follow: document.getElementById('chk-follow').checked,
+        vr_zoom_crop: document.getElementById('chk-zoom').checked,
       };
 
       document.getElementById('lbl-dwell-time').textContent = `${cfg.dwell_time_ms} ms`;
@@ -883,8 +913,10 @@
       document.getElementById('lbl-fov-pitch').textContent = `${cfg.fov_pitch_deg}°`;
       document.getElementById('lbl-smooth').textContent = `${cfg.smoothing_min_cutoff} Hz`;
       document.getElementById('lbl-deadzone').textContent = `${cfg.deadzone_deg}°`;
-      document.getElementById('lbl-dist').textContent = `${cfg.vr_screen_distance.toFixed(1)} m`;
+      document.getElementById('lbl-dist').textContent = `${cfg.vr_screen_distance.toFixed(2)} m`;
       document.getElementById('lbl-curv').textContent = `${Math.round(cfg.vr_screen_curvature * 100)}%`;
+      document.getElementById('lbl-scale').textContent = `${Math.round(cfg.stream_scale * 100)}%`;
+      document.getElementById('lbl-qual').textContent = `${cfg.stream_quality}%`;
       document.getElementById('lbl-ipd').textContent = `${Math.round(cfg.vr_ipd_offset * 1000)} mm`;
 
       await fetch('/api/config', {

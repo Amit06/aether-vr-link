@@ -182,13 +182,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         clickMode = obj.optString("clickMode", "left").uppercase()
                         totalClicks = obj.optInt("totalClicks", 0)
 
-                        glRenderer.screenDistance = obj.optDouble("dist", 2.1).toFloat()
-                        glRenderer.screenCurvature = obj.optDouble("curv", 0.35).toFloat()
-                        glRenderer.ipdOffset = obj.optDouble("ipd", 0.064).toFloat()
+                        glRenderer.screenDistance = obj.optDouble("dist", 1.25).toFloat()
+                        glRenderer.screenCurvature = obj.optDouble("curv", 0.28).toFloat()
+                        glRenderer.ipdOffset = obj.optDouble("ipd", 0.062).toFloat()
+                        glRenderer.gazeFollowEnabled = obj.optBoolean("follow", true)
 
                         if (clicked) {
                             triggerHapticPulse()
                         }
+                    } else if (type == "reconnect_stream") {
+                        connectStreamOnly()
                     }
                 } catch (_: Exception) {
                 }

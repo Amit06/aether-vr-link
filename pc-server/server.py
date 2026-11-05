@@ -252,12 +252,21 @@ class AetherEngineState:
         self.invert_pitch: bool = False
 
         # Display & VR Optics Config (synced to Android Native Renderer)
-        self.stream_fps: int = 38
-        self.stream_quality: int = 78
-        self.stream_scale: float = 0.85
-        self.vr_screen_distance: float = 2.1
-        self.vr_screen_curvature: float = 0.35
-        self.vr_ipd_offset: float = 0.064
+        # Tuned for maximum text clarity & high-resolution VR readability:
+        # - stream_scale = 1.0 (100% Native 1:1 Pixel Resolution, zero downscaling blur)
+        # - stream_quality = 92 with 4:4:4 chroma (subsampling=0) for razor-sharp UI & text
+        # - vr_screen_distance = 1.25m (fills 88% of each eye's horizontal viewport)
+        # - vr_gaze_follow = True (smoothly pans virtual camera toward cursor when reading edges)
+        # - vr_zoom_crop = False (optional 2.0x Retina Gaze Magnifier around cursor)
+        self.stream_fps: int = 35
+        self.stream_quality: int = 92
+        self.stream_scale: float = 1.0
+        self.vr_screen_distance: float = 1.25
+        self.vr_screen_curvature: float = 0.28
+        self.vr_ipd_offset: float = 0.062
+        self.vr_gaze_follow: bool = True
+        self.vr_zoom_crop: bool = False
+        self.vr_zoom_factor: float = 1.85
 
         # Orientation & Calibration State
         self.raw_yaw: float = 0.0
@@ -520,13 +529,21 @@ class AetherEngineState:
         if "stream_fps" in cfg:
             self.stream_fps = max(10, min(60, int(cfg["stream_fps"])))
         if "stream_quality" in cfg:
-            self.stream_quality = max(30, min(95, int(cfg["stream_quality"])))
+            self.stream_quality = max(40, min(98, int(cfg["stream_quality"])))
+        if "stream_scale" in cfg:
+            self.stream_scale = max(0.4, min(1.0, float(cfg["stream_scale"])))
         if "vr_screen_distance" in cfg:
-            self.vr_screen_distance = max(1.0, min(4.5, float(cfg["vr_screen_distance"])))
+            self.vr_screen_distance = max(0.75, min(4.5, float(cfg["vr_screen_distance"])))
         if "vr_screen_curvature" in cfg:
             self.vr_screen_curvature = max(0.0, min(1.0, float(cfg["vr_screen_curvature"])))
         if "vr_ipd_offset" in cfg:
             self.vr_ipd_offset = max(0.040, min(0.080, float(cfg["vr_ipd_offset"])))
+        if "vr_gaze_follow" in cfg:
+            self.vr_gaze_follow = bool(cfg["vr_gaze_follow"])
+        if "vr_zoom_crop" in cfg:
+            self.vr_zoom_crop = bool(cfg["vr_zoom_crop"])
+        if "vr_zoom_factor" in cfg:
+            self.vr_zoom_factor = max(1.2, min(3.5, float(cfg["vr_zoom_factor"])))
 
     def to_status_dict(self) -> dict:
         now = time.perf_counter()
@@ -579,9 +596,13 @@ class AetherEngineState:
                 "invert_pitch": self.invert_pitch,
                 "stream_fps": self.stream_fps,
                 "stream_quality": self.stream_quality,
+                "stream_scale": self.stream_scale,
                 "vr_screen_distance": self.vr_screen_distance,
                 "vr_screen_curvature": self.vr_screen_curvature,
                 "vr_ipd_offset": self.vr_ipd_offset,
+                "vr_gaze_follow": self.vr_gaze_follow,
+                "vr_zoom_crop": self.vr_zoom_crop,
+                "vr_zoom_factor": self.vr_zoom_factor,
             },
         }
 
@@ -645,6 +666,8 @@ async def api_snapshot():
         engine.norm_x,
         engine.norm_y,
         engine.dwell_progress,
+        engine.vr_zoom_crop,
+        engine.vr_zoom_factor,
     )
     return Response(content=frame_bytes, media_type="image/jpeg")
 
@@ -704,6 +727,8 @@ async def ws_vr_headset(websocket: WebSocket):
                 feedback["dist"] = engine.vr_screen_distance
                 feedback["curv"] = engine.vr_screen_curvature
                 feedback["ipd"] = engine.vr_ipd_offset
+                feedback["aspect"] = round(engine.screen_w / max(1, engine.screen_h), 3)
+                feedback["follow"] = engine.vr_gaze_follow
                 await websocket.send_text(json.dumps(feedback))
                 if len(stream_clients) == 0 and (engine.imu_packets_count % 60 == 1):
                     await websocket.send_text(json.dumps({"type": "reconnect_stream"}))
@@ -721,6 +746,9 @@ async def ws_vr_headset(websocket: WebSocket):
                 idx = (modes.index(engine.click_mode) + 1) % len(modes)
                 engine.click_mode = modes[idx]
                 await websocket.send_text(json.dumps({"type": "event", "event": "mode_changed", "mode": engine.click_mode}))
+            elif msg_type == "toggle_zoom":
+                engine.vr_zoom_crop = not engine.vr_zoom_crop
+                await websocket.send_text(json.dumps({"type": "event", "event": "zoom_toggled", "zoom": engine.vr_zoom_crop}))
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -729,7 +757,16 @@ async def ws_vr_headset(websocket: WebSocket):
         vr_display_clients.discard(websocket)
 
 
-def capture_frame_bytes(mon_rect: dict, scale: float, quality: int, norm_x: float, norm_y: float, dwell: float) -> bytes:
+def capture_frame_bytes(
+    mon_rect: dict,
+    scale: float,
+    quality: int,
+    norm_x: float,
+    norm_y: float,
+    dwell: float,
+    zoom_crop: bool = False,
+    zoom_factor: float = 1.85,
+) -> bytes:
     bind_input_desktop()
     mon_idx = int(mon_rect.get("index", 2))
     with mss.MSS() as sct:
@@ -740,30 +777,42 @@ def capture_frame_bytes(mon_rect: dict, scale: float, quality: int, norm_x: floa
         raw_shot = sct.grab(monitor)
         img = Image.frombytes("RGB", raw_shot.size, raw_shot.bgra, "raw", "BGRX")
 
-    target_w = int(raw_shot.width * scale)
-    target_h = int(raw_shot.height * scale)
-    if target_w > 0 and target_h > 0:
-        img = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
+    src_w, src_h = raw_shot.width, raw_shot.height
 
+    # Draw high-contrast spatial cursor + dwell ring at native 1:1 resolution before any scaling/cropping
     draw = ImageDraw.Draw(img)
-    cx = int(norm_x * target_w)
-    cy = int(norm_y * target_h)
-    r_outer = 14
-    draw.ellipse((cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer), outline=(0, 240, 255), width=2)
-    draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255))
+    cx = int(norm_x * src_w)
+    cy = int(norm_y * src_h)
+    r_outer = 16
+    draw.ellipse((cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer), outline=(0, 240, 255), width=3)
+    draw.ellipse((cx - 4, cy - 4, cx + 4, cy + 4), fill=(255, 255, 255))
     if dwell > 0.02:
         extent = int(360 * dwell)
-        r_dwell = 22
+        r_dwell = 25
         draw.arc(
             (cx - r_dwell, cy - r_dwell, cx + r_dwell, cy + r_dwell),
             start=-90,
             end=-90 + extent,
             fill=(0, 255, 163),
-            width=4,
+            width=5,
         )
 
+    # Optional Gaze-Centered Retina Magnifier Crop (Delivers 1:1 pixel-perfect clarity around where you look)
+    if zoom_crop and zoom_factor > 1.05:
+        crop_w = int(src_w / zoom_factor)
+        crop_h = int(src_h / zoom_factor)
+        left = max(0, min(src_w - crop_w, cx - crop_w // 2))
+        top = max(0, min(src_h - crop_h, cy - crop_h // 2))
+        img = img.crop((left, top, left + crop_w, top + crop_h))
+    elif scale < 0.99:
+        target_w = int(src_w * scale)
+        target_h = int(src_h * scale)
+        if target_w > 0 and target_h > 0:
+            img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=quality, optimize=False)
+    # subsampling=0 enables 4:4:4 full-color chroma so colored text & UI edges have zero compression blur!
+    img.save(buf, format="JPEG", quality=quality, subsampling=0, optimize=False)
     return buf.getvalue()
 
 
@@ -823,6 +872,12 @@ async def ws_dashboard(websocket: WebSocket):
         pass
     finally:
         dashboard_clients.discard(websocket)
+
+
+@app.get("/download/apk")
+async def download_latest_apk():
+    apk_path = BASE_DIR.parent / "android-app" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    return FileResponse(apk_path, filename="AetherVR-HighRes.apk", media_type="application/vnd.android.package-archive")
 
 
 @app.get("/")
